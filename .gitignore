@@ -30,3 +30,7 @@ DerivedData/
 .env.local
 *.pem
 credentials.json
+
+# Local only (not for remote)
+AGENTS.md
+开发计划.md
