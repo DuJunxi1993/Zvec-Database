@@ -1,0 +1,32 @@
+# XcodeGen
+*.xcodeproj
+*.xcworkspace
+
+# SPM / CocoaPods
+.build/
+Packages/
+*.xcworkspace
+
+# Derived Data
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+
+# Build Logs
+*.xcscmblueprint
+*.xcuserstate
+*.xcuserdatad
+
+# Editor
+*.swp
+*~
+.DS_Store
+.vscode/
+.idea/
+
+# Environment / Secrets
+.env
+.env.local
+*.pem
+credentials.json
