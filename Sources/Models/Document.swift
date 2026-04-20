@@ -41,13 +41,16 @@ struct Document: Identifiable {
     var fileSize: Int64 = 0
     var userSelectedType: DocumentType = .law
 
-    init(url: URL, title: String? = nil, type: DocumentType = .misc, fileSize: Int64 = 0) {
+    init(url: URL, title: String? = nil, type: DocumentType = .misc, fileSize: Int64 = 0, userSelectedType: DocumentType? = nil) {
         self.id = UUID()
         self.url = url
         self.title = title ?? url.deletingPathExtension().lastPathComponent
         self.type = type
         self.sourcePath = url.path
         self.fileSize = fileSize
+        if let ust = userSelectedType {
+            self.userSelectedType = ust
+        }
     }
 }
 

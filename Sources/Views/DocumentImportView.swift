@@ -77,6 +77,11 @@ struct DocumentImportView: View {
         }
         .frame(minWidth: 700, minHeight: 500)
         .onAppear(perform: loadKnowledgeBases)
+        .onChange(of: selectedDocumentType) { _, newType in
+            for i in selectedDocuments.indices {
+                selectedDocuments[i].userSelectedType = newType
+            }
+        }
         .fileImporter(isPresented: $showingFilePicker, allowedContentTypes: [.pdf, .text, UTType(filenameExtension: "docx")!, UTType(filenameExtension: "md")!, UTType(filenameExtension: "markdown")!], allowsMultipleSelection: true) { result in
             handleFileSelection(result)
         }
@@ -204,7 +209,7 @@ struct DocumentImportView: View {
             List {
                 ForEach(selectedDocuments) { doc in
                     HStack {
-                        Image(systemName: doc.type.icon)
+                        Image(systemName: doc.userSelectedType.icon)
                             .foregroundColor(doc.duplicateLevel == .none ? .blue : .orange)
                         Text(doc.title)
                             .lineLimit(1)
@@ -214,7 +219,7 @@ struct DocumentImportView: View {
                                 .foregroundColor(.orange)
                         }
                         Spacer()
-                        Text(doc.type.displayName)
+                        Text(doc.userSelectedType.displayName)
                             .foregroundColor(.secondary)
                         if let pages = doc.pageCount {
                             Text("\(pages) 页")
@@ -367,6 +372,7 @@ struct DocumentImportView: View {
     }
 
     private func addDocuments(from urls: [URL]) {
+        let currentType = selectedDocumentType
         for url in urls {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
@@ -375,8 +381,7 @@ struct DocumentImportView: View {
             let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
             let fileSize = attrs?[.size] as? Int64 ?? 0
 
-            var doc = Document(url: url, fileSize: fileSize)
-            doc.userSelectedType = selectedDocumentType
+            let doc = Document(url: url, fileSize: fileSize, userSelectedType: currentType)
 
             // 精确路径匹配 → 跳过
             if selectedDocuments.contains(where: { $0.url == url }) {
@@ -426,14 +431,14 @@ struct DocumentImportView: View {
                 return ["pdf", "docx", "txt", "md", "markdown"].contains(ext)
             }
 
+            let currentType = selectedDocumentType
             for docUrl in documentURLs {
                 guard docUrl.startAccessingSecurityScopedResource() else { continue }
                 defer { docUrl.stopAccessingSecurityScopedResource() }
 
                 let attrs = try? FileManager.default.attributesOfItem(atPath: docUrl.path)
                 let fileSize = attrs?[.size] as? Int64 ?? 0
-                var doc = Document(url: docUrl, fileSize: fileSize)
-                doc.userSelectedType = selectedDocumentType
+                let doc = Document(url: docUrl, fileSize: fileSize, userSelectedType: currentType)
                 if !selectedDocuments.contains(where: { $0.url == docUrl }) {
                     selectedDocuments.append(doc)
                 }
