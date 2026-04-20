@@ -1,6 +1,6 @@
 # Zvec Database
 
-法律知识库 macOS 原生应用，基于 SwiftUI 构建，支持向量数据库存储与 AI 检索。
+阿里Zvec向量知识库 macOS 原生管理应用，基于 SwiftUI 构建，支持向量数据库存储与 AI 检索，针对法律检索进行了分块逻辑增强。
 
 ## 功能
 
