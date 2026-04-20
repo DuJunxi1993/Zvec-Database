@@ -53,3 +53,7 @@ Resources/
 ## 许可证
 
 MIT
+
+## 第三方依赖
+
+- [Zvec](https://github.com/alibaba/zvec) — 向量数据库引擎（Apache 2.0）
