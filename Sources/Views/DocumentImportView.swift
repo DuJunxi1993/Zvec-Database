@@ -79,7 +79,7 @@ struct DocumentImportView: View {
         .onAppear(perform: loadKnowledgeBases)
         .onChange(of: selectedDocumentType) { _, newType in
             for i in selectedDocuments.indices {
-                selectedDocuments[i].userSelectedType = newType
+                selectedDocuments[i].type = newType
             }
         }
         .fileImporter(isPresented: $showingFilePicker, allowedContentTypes: [.pdf, .text, UTType(filenameExtension: "docx")!, UTType(filenameExtension: "md")!, UTType(filenameExtension: "markdown")!], allowsMultipleSelection: true) { result in
@@ -209,7 +209,7 @@ struct DocumentImportView: View {
             List {
                 ForEach(selectedDocuments) { doc in
                     HStack {
-                        Image(systemName: doc.userSelectedType.icon)
+                        Image(systemName: doc.type.icon)
                             .foregroundColor(doc.duplicateLevel == .none ? .blue : .orange)
                         Text(doc.title)
                             .lineLimit(1)
@@ -219,7 +219,7 @@ struct DocumentImportView: View {
                                 .foregroundColor(.orange)
                         }
                         Spacer()
-                        Text(doc.userSelectedType.displayName)
+                        Text(doc.type.displayName)
                             .foregroundColor(.secondary)
                         if let pages = doc.pageCount {
                             Text("\(pages) 页")
@@ -381,7 +381,7 @@ struct DocumentImportView: View {
             let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
             let fileSize = attrs?[.size] as? Int64 ?? 0
 
-            let doc = Document(url: url, fileSize: fileSize, userSelectedType: currentType)
+            let doc = Document(url: url, type: currentType, fileSize: fileSize)
 
             // 精确路径匹配 → 跳过
             if selectedDocuments.contains(where: { $0.url == url }) {
@@ -438,7 +438,7 @@ struct DocumentImportView: View {
 
                 let attrs = try? FileManager.default.attributesOfItem(atPath: docUrl.path)
                 let fileSize = attrs?[.size] as? Int64 ?? 0
-                let doc = Document(url: docUrl, fileSize: fileSize, userSelectedType: currentType)
+                let doc = Document(url: docUrl, type: currentType, fileSize: fileSize)
                 if !selectedDocuments.contains(where: { $0.url == docUrl }) {
                     selectedDocuments.append(doc)
                 }
@@ -455,7 +455,7 @@ struct DocumentImportView: View {
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
                         let (text, pages) = try DocumentParser.shared.parseDocument(url: firstDoc.url)
-                        let chunks = DocumentParser.shared.chunkText(text, type: firstDoc.userSelectedType ?? firstDoc.type, sourceDocument: firstDoc.title, sourcePath: firstDoc.sourcePath)
+                        let chunks = DocumentParser.shared.chunkText(text, type: firstDoc.type, sourceDocument: firstDoc.title, sourcePath: firstDoc.sourcePath)
                         continuation.resume(returning: (text, pages, chunks))
                     } catch {
                         continuation.resume(returning: ("", nil, []))
@@ -526,14 +526,16 @@ struct DocumentImportView: View {
 
     private func performImportWithOverwrite(duplicates: [Document], cleanDocs: [Document]) {
         skipDuplicatePromptThisSession = true
-        // 覆盖模式：只导入新文档（已在 KB 中的会被跳过）
-        // 实际覆盖通过"跳过"重复来实现，下次用户可手动删除旧文档后重新导入
-        if cleanDocs.isEmpty && !duplicates.isEmpty {
+        // 覆盖模式：删除旧文档向量，重新导入所有文档
+        if cleanDocs.isEmpty && duplicates.isEmpty {
             isImporting = false
-            errorMessage = "所有文档均已存在，请先删除旧文档后再导入"
+            errorMessage = "没有需要导入的文档"
             return
         }
-        performImportWithSkip(cleanDocs: cleanDocs)
+        // 收集所有需要导入的文档（新增的 + 将被覆盖的）
+        var allDocsToImport = cleanDocs
+        allDocsToImport.append(contentsOf: duplicates)
+        performImport(documents: allDocsToImport, overwriteMode: true, existingKB: selectedKB)
     }
 
     private func performImportWithSkip(cleanDocs: [Document]) {
@@ -543,16 +545,17 @@ struct DocumentImportView: View {
             errorMessage = "没有需要导入的文档"
             return
         }
-        performImport(documents: cleanDocs, overwriteIds: [])
+        performImport(documents: cleanDocs, overwriteMode: false, existingKB: selectedKB)
     }
 
     private func performImportWithKeepAll() {
-        performImport(documents: selectedDocuments, overwriteIds: [])
+        performImport(documents: selectedDocuments, overwriteMode: false, existingKB: selectedKB)
     }
 
-    private func performImport(documents: [Document], overwriteIds: [UUID] = []) {
-        self.overwriteIds = overwriteIds
-        guard let kb = selectedKB, !documents.isEmpty else { return }
+    private func performImport(documents: [Document], overwriteMode: Bool, existingKB: KnowledgeBase?) {
+        self.overwriteMode = overwriteMode
+        self.existingKB = existingKB
+        guard let kb = existingKB ?? selectedKB, !documents.isEmpty else { return }
         isImporting = true
         importProgress = (0, documents.count)
         importStatusMessage = "正在解析文档..."
@@ -573,7 +576,7 @@ struct DocumentImportView: View {
                     for doc in docsToProcess {
                         do {
                             let (text, _) = try DocumentParser.shared.parseDocument(url: doc.url)
-                            let docChunks = DocumentParser.shared.chunkText(text, type: doc.userSelectedType ?? doc.type, sourceDocument: doc.title, sourcePath: doc.sourcePath)
+                            let docChunks = DocumentParser.shared.chunkText(text, type: doc.type, sourceDocument: doc.title, sourcePath: doc.sourcePath)
                             parsed.append((doc, docChunks))
                             results.append(ImportResult(
                                 id: UUID(), title: doc.title, status: .pending, chunkCount: docChunks.count, errorMessage: nil
@@ -601,8 +604,8 @@ struct DocumentImportView: View {
             var totalImported = 0
             var detectedDim: Int?
 
-            guard let scriptPath = copyScriptToTemp("import.js"),
-                  let optimizeScriptPath = copyScriptToTemp("optimize.js") else {
+            guard let scriptPath = ZvecService.shared.copyScriptToTemp("import.js"),
+                  let optimizeScriptPath = ZvecService.shared.copyScriptToTemp("optimize.js") else {
                 await MainActor.run {
                     errorMessage = "无法获取脚本文件"
                     isImporting = false
@@ -740,17 +743,14 @@ struct DocumentImportView: View {
             // === 更新知识库元数据 ===
             await MainActor.run {
                 importStatusMessage = "正在更新元数据..."
-                if totalImported > 0 || !overwriteIds.isEmpty {
+                if totalImported > 0 {
                     var store = KnowledgeBaseStore.load()
                     if let index = store.knowledgeBases.firstIndex(where: { $0.id == kbForImport.id }) {
-                        // 删除被覆盖的文档记录
-                        if !overwriteIds.isEmpty {
-                            for oid in overwriteIds {
-                                if let docIndex = store.knowledgeBases[index].documents.firstIndex(where: { $0.id == oid }) {
-                                    store.knowledgeBases[index].documents.remove(at: docIndex)
-                                    store.knowledgeBases[index].documentCount -= 1
-                                }
-                            }
+                        // 覆盖模式：清除所有旧文档记录
+                        if overwriteMode {
+                            store.knowledgeBases[index].documents.removeAll()
+                            store.knowledgeBases[index].documentCount = 0
+                            store.knowledgeBases[index].chunkCount = 0
                         }
 
                         var successDocCount = 0
@@ -758,7 +758,7 @@ struct DocumentImportView: View {
                             let result = importResults.first(where: { $0.title == doc.title })
                             let actualChunkCount = result?.chunkCount ?? 0
                             let record = DocumentRecord(
-                                title: doc.title, type: doc.userSelectedType ?? .law, pageCount: doc.pageCount, chunkCount: actualChunkCount, sourcePath: doc.sourcePath, fileSize: doc.fileSize, userSelectedType: doc.userSelectedType ?? .law
+                                title: doc.title, type: doc.type, pageCount: doc.pageCount, chunkCount: actualChunkCount, sourcePath: doc.sourcePath, fileSize: doc.fileSize
                             )
                             store.knowledgeBases[index].documents.append(record)
                             if result?.status == .success {
@@ -784,59 +784,8 @@ struct DocumentImportView: View {
         }
     }
 
-    @State private var overwriteIds: [UUID] = []
-
-    private func copyScriptToTemp(_ scriptName: String) -> String? {
-        var bundleScriptURL: URL?
-
-        if let resourcePath = Bundle.main.resourcePath {
-            let rootURL = URL(fileURLWithPath: resourcePath).appendingPathComponent(scriptName)
-            if FileManager.default.fileExists(atPath: rootURL.path) {
-                bundleScriptURL = rootURL
-            }
-        }
-
-        if bundleScriptURL == nil, let resourcePath = Bundle.main.resourcePath {
-            let scriptsURL = URL(fileURLWithPath: resourcePath).appendingPathComponent("scripts/\(scriptName)")
-            if FileManager.default.fileExists(atPath: scriptsURL.path) {
-                bundleScriptURL = scriptsURL
-            }
-        }
-
-        if bundleScriptURL == nil {
-            if let path = Bundle.main.path(forResource: scriptName, ofType: nil) {
-                bundleScriptURL = URL(fileURLWithPath: path)
-            }
-        }
-
-        if bundleScriptURL == nil {
-            if let path = Bundle.main.path(forResource: scriptName, ofType: nil, inDirectory: "scripts") {
-                bundleScriptURL = URL(fileURLWithPath: path)
-            }
-        }
-
-        guard let scriptURL = bundleScriptURL else {
-            print("Script not found: \(scriptName)")
-            return nil
-        }
-
-        guard let scriptContent = try? String(contentsOf: scriptURL, encoding: .utf8) else {
-            print("Failed to read script at: \(scriptURL.path)")
-            return nil
-        }
-
-        let tempDir = FileManager.default.temporaryDirectory
-        let tempScriptURL = tempDir.appendingPathComponent(scriptName)
-
-        do {
-            try scriptContent.write(to: tempScriptURL, atomically: true, encoding: .utf8)
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tempScriptURL.path)
-            return tempScriptURL.path
-        } catch {
-            print("Failed to write temp script: \(error)")
-            return nil
-        }
-    }
+    @State private var overwriteMode: Bool = false
+    @State private var existingKB: KnowledgeBase?
 }
 
 #Preview {

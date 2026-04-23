@@ -97,7 +97,7 @@ class ZvecService {
         }
     }
 
-    private func copyScriptToTemp(_ scriptName: String) -> String? {
+    func copyScriptToTemp(_ scriptName: String) -> String? {
         var bundleScriptURL: URL?
 
         if let resourcePath = Bundle.main.resourcePath {

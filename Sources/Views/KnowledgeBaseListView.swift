@@ -357,7 +357,7 @@ struct KnowledgeBaseListView: View {
             let nodePath = zvecService.getNodePath()
             let npmGlobalPath = zvecService.getNpmGlobalPath()
 
-            guard let scriptPath = copyScriptToTemp("search.js") else {
+            guard let scriptPath = ZvecService.shared.copyScriptToTemp("search.js") else {
                 await MainActor.run {
                     errorMessage = "无法获取脚本文件"
                     isSearching = false
@@ -456,70 +456,6 @@ struct KnowledgeBaseListView: View {
             await MainActor.run {
                 isSearching = false
             }
-        }
-    }
-
-    // MARK: - 辅助方法
-
-    /// 将脚本从 Bundle 复制到临时目录并赋予执行权限
-    private func copyScriptToTemp(_ scriptName: String) -> String? {
-        var bundleScriptURL: URL?
-
-        // 直接检查 Resources 根目录
-        if let resourcePath = Bundle.main.resourcePath {
-            let rootURL = URL(fileURLWithPath: resourcePath).appendingPathComponent(scriptName)
-            if FileManager.default.fileExists(atPath: rootURL.path) {
-                bundleScriptURL = rootURL
-            }
-        }
-
-        // 检查 scripts 子目录
-        if bundleScriptURL == nil, let resourcePath = Bundle.main.resourcePath {
-            let scriptsURL = URL(fileURLWithPath: resourcePath).appendingPathComponent("scripts/\(scriptName)")
-            if FileManager.default.fileExists(atPath: scriptsURL.path) {
-                bundleScriptURL = scriptsURL
-            }
-        }
-
-        // 使用 Bundle API
-        if bundleScriptURL == nil {
-            if let path = Bundle.main.path(forResource: scriptName, ofType: nil) {
-                bundleScriptURL = URL(fileURLWithPath: path)
-            }
-        }
-
-        if bundleScriptURL == nil {
-            if let path = Bundle.main.path(forResource: scriptName, ofType: nil, inDirectory: "scripts") {
-                bundleScriptURL = URL(fileURLWithPath: path)
-            }
-        }
-
-        guard let scriptURL = bundleScriptURL else {
-            print("Script not found: \(scriptName)")
-            return nil
-        }
-
-        // 读取脚本内容
-        guard let scriptContent = try? String(contentsOf: scriptURL, encoding: .utf8) else {
-            print("Failed to read script at: \(scriptURL.path)")
-            return nil
-        }
-
-        // 创建临时文件
-        let tempDir = FileManager.default.temporaryDirectory
-        let tempScriptURL = tempDir.appendingPathComponent(scriptName)
-
-        do {
-            // 写入临时目录
-            try scriptContent.write(to: tempScriptURL, atomically: true, encoding: .utf8)
-
-            // 设置执行权限
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tempScriptURL.path)
-
-            return tempScriptURL.path
-        } catch {
-            print("Failed to write temp script: \(error)")
-            return nil
         }
     }
 }

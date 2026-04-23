@@ -41,13 +41,12 @@ struct DocumentRecord: Codable, Identifiable {
     let sourcePath: String
     var duplicateLevel: DuplicateLevel = .none
     var fileSize: Int64 = 0
-    var userSelectedType: DocumentType = .law
 
     var fileSizeFormatted: String {
         ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
     }
 
-    init(title: String, type: DocumentType, pageCount: Int?, chunkCount: Int, sourcePath: String, fileSize: Int64 = 0, userSelectedType: DocumentType = .law) {
+    init(title: String, type: DocumentType, pageCount: Int?, chunkCount: Int, sourcePath: String, fileSize: Int64 = 0) {
         self.id = UUID()
         self.title = title
         self.type = type
@@ -56,7 +55,6 @@ struct DocumentRecord: Codable, Identifiable {
         self.importedAt = Date()
         self.sourcePath = sourcePath
         self.fileSize = fileSize
-        self.userSelectedType = userSelectedType
     }
 }
 

@@ -34,23 +34,19 @@ struct Document: Identifiable {
     let id: UUID
     let url: URL
     let title: String
-    let type: DocumentType
     var pageCount: Int?
     var sourcePath: String
     var duplicateLevel: DuplicateLevel = .none
     var fileSize: Int64 = 0
-    var userSelectedType: DocumentType = .law
+    var type: DocumentType
 
-    init(url: URL, title: String? = nil, type: DocumentType = .misc, fileSize: Int64 = 0, userSelectedType: DocumentType? = nil) {
+    init(url: URL, title: String? = nil, type: DocumentType = .law, fileSize: Int64 = 0) {
         self.id = UUID()
         self.url = url
         self.title = title ?? url.deletingPathExtension().lastPathComponent
         self.type = type
         self.sourcePath = url.path
         self.fileSize = fileSize
-        if let ust = userSelectedType {
-            self.userSelectedType = ust
-        }
     }
 }
 
